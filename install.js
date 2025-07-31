@@ -38,12 +38,12 @@ module.exports = {
         }
       }
     },
-    // Install vLLM with audio support after PyTorch is properly installed
+    // Install vLLM from PyPI (stable version) for Windows compatibility
     {
       method: "shell.run",
       params: {
         venv: "env",
-        message: "uv pip install -U \"vllm[audio]\" --extra-index-url https://wheels.vllm.ai/nightly"
+        message: "pip install vllm"
       }
     },
     // Create installation completion marker
@@ -51,7 +51,7 @@ module.exports = {
       method: "fs.write",
       params: {
         path: "INSTALLATION_COMPLETE.txt",
-        text: "Voxtral installation completed successfully.\n\nNext steps:\n1. Start the vLLM server using the Start button\n2. Open the web interface at the provided URL\n3. Begin interacting with Voxtral for audio understanding\n\nFeatures:\n- Voxtral Large Audio-Language Model\n- Speech, sound, and music understanding\n- Audio transcription and translation\n- Direct audio Q&A interactions\n- Gradio web interface\n- GPU acceleration (if available)\n- PyTorch with CUDA support (if NVIDIA GPU detected)\n\nFor support, check the README.md file.\n\nNote: The vLLM server will download the Voxtral model on first use."
+        text: "Voxtral installation completed successfully.\n\nNext steps:\n1. Start the vLLM server using the Start button\n2. Open the web interface at the provided URL\n3. Begin interacting with Voxtral for audio understanding\n\nFeatures:\n- Voxtral Large Audio-Language Model\n- Speech, sound, and music understanding\n- Audio transcription and translation\n- Direct audio Q&A interactions\n- Gradio web interface\n- GPU acceleration (if available)\n- PyTorch with CUDA support (if NVIDIA GPU detected)\n\nFor support, check the README.md file.\n\nNote: The vLLM server will download the Voxtral model on first use.\n\nIMPORTANT: vLLM may have limited Windows support. For best results, use Linux or WSL."
       }
     }
   ]
