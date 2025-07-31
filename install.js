@@ -8,15 +8,7 @@ module.exports = {
         message: "pip install uv"
       }
     },
-    // Install vLLM with audio support
-    {
-      method: "shell.run",
-      params: {
-        venv: "env",
-        message: "uv pip install -U \"vllm[audio]\" --torch-backend=auto --extra-index-url https://wheels.vllm.ai/nightly"
-      }
-    },
-    // Install Voxtral dependencies
+    // Install basic requirements first (gradio, openai, etc.)
     {
       method: "shell.run",
       params: {
@@ -32,7 +24,7 @@ module.exports = {
         message: "pip install --upgrade \"mistral-common[audio]\""
       }
     },
-    // Install PyTorch last with GPU support to prevent version conflicts
+    // Install PyTorch with GPU support before vLLM to ensure compatibility
     {
       method: "script.start",
       params: {
@@ -44,6 +36,14 @@ module.exports = {
           sageattention: true,
           force_reinstall: false
         }
+      }
+    },
+    // Install vLLM with audio support after PyTorch is properly installed
+    {
+      method: "shell.run",
+      params: {
+        venv: "env",
+        message: "uv pip install -U \"vllm[audio]\" --extra-index-url https://wheels.vllm.ai/nightly"
       }
     },
     // Create installation completion marker
