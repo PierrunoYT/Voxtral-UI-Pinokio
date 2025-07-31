@@ -1,9 +1,9 @@
 const path = require('path')
 module.exports = {
-  version: "3.7",
-  title: "<TITLE>",
-  description: "",
-  icon: "<ICON>",
+  version: "1.0",
+  title: "Voxtral UI",
+  description: "A complete Pinokio installation package for running Mistral AI's Voxtral locally with a beautiful Gradio web interface.",
+  icon: "icon.png",
   menu: async (kernel, info) => {
     let installed = info.exists("env")
     let running = {
