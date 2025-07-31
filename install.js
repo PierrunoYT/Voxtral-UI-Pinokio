@@ -1,19 +1,5 @@
 module.exports = {
   run: [
-    // Install PyTorch first with GPU support
-    {
-      method: "script.start",
-      params: {
-        uri: "torch.js",
-        params: {
-          venv: "env",
-          xformers: true,
-          triton: true,
-          sageattention: true,
-          force_reinstall: false
-        }
-      }
-    },
     // Install UV package manager for faster installations
     {
       method: "shell.run",
@@ -44,6 +30,20 @@ module.exports = {
       params: {
         venv: "env",
         message: "pip install --upgrade \"mistral-common[audio]\""
+      }
+    },
+    // Install PyTorch last with GPU support to prevent version conflicts
+    {
+      method: "script.start",
+      params: {
+        uri: "torch.js",
+        params: {
+          venv: "env",
+          xformers: true,
+          triton: true,
+          sageattention: true,
+          force_reinstall: false
+        }
       }
     },
     // Create installation completion marker
