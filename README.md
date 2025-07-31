@@ -1,5 +1,7 @@
 # Voxtral UI Pinokio
 
+> **⚠️ IMPORTANT NOTICE**: This package is currently not working due to vLLM compatibility issues. We are working on resolving these issues. Please check back for updates.
+
 A complete Pinokio installation package for running Mistral AI's Voxtral locally with a beautiful Gradio web interface.
 
 ## 🚀 Features
