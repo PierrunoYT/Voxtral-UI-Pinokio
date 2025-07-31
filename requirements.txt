@@ -1,0 +1,10 @@
+gradio>=4.0.0
+openai
+mistral-common[audio]
+transformers>=4.46.0
+accelerate
+peft>=0.14.0
+huggingface-hub
+torch
+torchaudio
+numpy
