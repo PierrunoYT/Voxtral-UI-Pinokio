@@ -13,8 +13,25 @@ def get_model_id():
             return models.data[0].id
         else:
             return "mistralai/Voxtral-Mini-3B-2507"  # fallback
-    except:
+    except Exception:
         return "mistralai/Voxtral-Mini-3B-2507"  # fallback
+
+
+def _extract_text(content):
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        texts = []
+        for item in content:
+            if isinstance(item, str):
+                texts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str):
+                    texts.append(text)
+        if texts:
+            return "".join(texts).strip()
+    return ""
 
 def transcribe(audio_file, prompt):
     if audio_file is None:
@@ -34,7 +51,7 @@ def transcribe(audio_file, prompt):
             temperature=0.2,
             top_p=0.95
         )
-        return response.choices[0].message.content
+        return _extract_text(response.choices[0].message.content)
     except Exception as e:
         return f"Fehler bei der Verarbeitung: {str(e)}\n\nStellen Sie sicher, dass der vLLM-Server läuft."
 

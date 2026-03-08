@@ -29,7 +29,7 @@ module.exports = {
     {
       method: "shell.run",
       params: {
-        message: "timeout 5 2>nul || sleep 5"
+        message: "python -c \"import time; time.sleep(5)\""
       }
     },
     // Start Gradio frontend
