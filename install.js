@@ -26,7 +26,7 @@ module.exports = {
           xformers: true,
           triton: true,
           sageattention: true,
-          force_reinstall: false
+          force_reinstall: true
         }
       }
     },

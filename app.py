@@ -3,7 +3,6 @@ import traceback
 
 import gradio as gr
 import torch
-from transformers import AutoProcessor, VoxtralForConditionalGeneration
 
 DEFAULT_MODEL_ID = os.environ.get("VOXTRAL_MODEL_ID", "mistralai/Voxtral-Mini-3B-2507")
 AVAILABLE_MODELS = [
@@ -44,6 +43,10 @@ def load_model(selected_model_id):
     loaded_model_id = None
 
     try:
+        # Import lazily to avoid startup crashes when a broken torchvision/torch
+        # install is present; users can still open the UI and read the error.
+        from transformers import AutoProcessor, VoxtralForConditionalGeneration
+
         processor = AutoProcessor.from_pretrained(selected_model_id)
         model = VoxtralForConditionalGeneration.from_pretrained(
             selected_model_id,
@@ -70,6 +73,8 @@ def transcribe(audio_file, prompt, selected_model_id):
         return (
             "Fehler beim Laden des Voxtral-Modells.\n\n"
             "Pruefen Sie Ihre GPU/RAM-Ressourcen und die installierten Abhaengigkeiten.\n\n"
+            "Falls Sie einen torchvision/torch Fehler sehen (z.B. 'operator torchvision::nms does not exist'),\n"
+            "fuehren Sie in Pinokio bitte Reset + Install erneut aus, damit passende Torch-Pakete neu installiert werden.\n\n"
             f"Details:\n{load_error}"
         )
     try:
