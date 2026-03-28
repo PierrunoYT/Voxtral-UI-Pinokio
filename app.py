@@ -5,7 +5,11 @@ import gradio as gr
 import torch
 from transformers import AutoProcessor, VoxtralForConditionalGeneration
 
-MODEL_ID = os.environ.get("VOXTRAL_MODEL_ID", "mistralai/Voxtral-Mini-3B-2507")
+DEFAULT_MODEL_ID = os.environ.get("VOXTRAL_MODEL_ID", "mistralai/Voxtral-Mini-3B-2507")
+AVAILABLE_MODELS = [
+    "mistralai/Voxtral-Mini-3B-2507",
+    "mistralai/Voxtral-Small-24B-2507",
+]
 MAX_NEW_TOKENS = int(os.environ.get("VOXTRAL_MAX_NEW_TOKENS", "384"))
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -14,35 +18,54 @@ torch_dtype = torch.float16 if device == "cuda" else torch.float32
 processor = None
 model = None
 load_error = None
+loaded_model_id = None
 
 
-def load_model():
-    global processor, model, load_error
-    if model is not None or load_error is not None:
+def load_model(selected_model_id):
+    global processor, model, load_error, loaded_model_id
+    if selected_model_id not in AVAILABLE_MODELS:
+        selected_model_id = DEFAULT_MODEL_ID
+
+    # Only reuse when the model is already loaded successfully.
+    if loaded_model_id == selected_model_id and model is not None and load_error is None:
         return
 
+    # Selection changed (or first load): clear previous state.
+    if model is not None:
+        del model
+    if processor is not None:
+        del processor
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    processor = None
+    model = None
+    load_error = None
+    loaded_model_id = None
+
     try:
-        processor = AutoProcessor.from_pretrained(MODEL_ID)
+        processor = AutoProcessor.from_pretrained(selected_model_id)
         model = VoxtralForConditionalGeneration.from_pretrained(
-            MODEL_ID,
+            selected_model_id,
             torch_dtype=torch_dtype,
             device_map="auto" if device == "cuda" else None,
             low_cpu_mem_usage=True,
         )
         if device == "cpu":
             model.to(device)
+        loaded_model_id = selected_model_id
     except Exception as exc:
         load_error = f"{exc}\n\n{traceback.format_exc()}"
 
 
-def transcribe(audio_file, prompt):
+def transcribe(audio_file, prompt, selected_model_id):
     if audio_file is None:
         return "Bitte laden Sie eine Audiodatei hoch."
 
     if not prompt:
         prompt = "Was hoerst du in dieser Audiodatei?"
 
-    load_model()
+    load_model(selected_model_id)
     if load_error:
         return (
             "Fehler beim Laden des Voxtral-Modells.\n\n"
@@ -75,7 +98,9 @@ def transcribe(audio_file, prompt):
             generated_tokens,
             skip_special_tokens=True,
         )
-        return decoded_outputs[0] if decoded_outputs else "Keine Antwort generiert."
+        if decoded_outputs:
+            return f"[Modell: {loaded_model_id}]\n\n{decoded_outputs[0]}"
+        return "Keine Antwort generiert."
     except Exception as exc:
         return f"Fehler bei der Verarbeitung: {exc}"
 
@@ -86,9 +111,19 @@ with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
         "Laden Sie Audio hoch und stellen Sie eine Textfrage fuer Voxtral. "
         "Diese Version nutzt Transformers direkt (ohne vLLM)."
     )
+    gr.Markdown(
+        "Modelle werden erst beim Klick auf **Generieren** geladen bzw. heruntergeladen "
+        "(nicht beim App-Start)."
+    )
     
     with gr.Row():
         with gr.Column():
+            model_select = gr.Dropdown(
+                label="Voxtral Modell",
+                choices=AVAILABLE_MODELS,
+                value=DEFAULT_MODEL_ID if DEFAULT_MODEL_ID in AVAILABLE_MODELS else AVAILABLE_MODELS[0],
+                interactive=True,
+            )
             audio_input = gr.Audio(
                 label="Audio hochladen", 
                 type="filepath",
@@ -99,7 +134,7 @@ with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
                 placeholder="Was hörst du in dieser Audiodatei?",
                 lines=3
             )
-            submit_btn = gr.Button("Analysieren", variant="primary")
+            submit_btn = gr.Button("Generieren", variant="primary")
         
         with gr.Column():
             output = gr.Textbox(
@@ -120,8 +155,9 @@ with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
     
     submit_btn.click(
         fn=transcribe,
-        inputs=[audio_input, prompt_input],
-        outputs=output
+        inputs=[audio_input, prompt_input, model_select],
+        outputs=output,
+        show_progress="full",
     )
 
 if __name__ == "__main__":
