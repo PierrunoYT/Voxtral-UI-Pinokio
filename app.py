@@ -88,7 +88,13 @@ def transcribe(audio_file, prompt, selected_model_id):
             }
         ]
 
-        inputs = processor.apply_chat_template(conversation)
+        inputs = processor.apply_chat_template(
+            conversation,
+            add_generation_prompt=True,
+            tokenize=True,
+            return_tensors="pt",
+            return_dict=True,
+        )
         if device == "cuda":
             inputs = inputs.to(model.device, dtype=torch_dtype)
         else:
@@ -106,6 +112,13 @@ def transcribe(audio_file, prompt, selected_model_id):
             return f"[Modell: {loaded_model_id}]\n\n{decoded_outputs[0]}"
         return "Keine Antwort generiert."
     except Exception as exc:
+        if "Can't compile non template nodes" in str(exc):
+            return (
+                "Fehler bei der Template-Verarbeitung des Modells.\n\n"
+                "Bitte aktualisieren Sie Transformers im env und versuchen Sie es erneut:\n"
+                "uv pip install --upgrade \"transformers>=4.56.0\" \"accelerate>=0.34.0\"\n\n"
+                f"Details: {exc}"
+            )
         return f"Fehler bei der Verarbeitung: {exc}"
 
 # Gradio Interface
