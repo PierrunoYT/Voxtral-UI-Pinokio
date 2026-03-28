@@ -19,6 +19,7 @@ processor = None
 model = None
 load_error = None
 loaded_model_id = None
+asr_pipeline = None
 
 
 def _clean_generated_text(text):
@@ -35,6 +36,27 @@ def _looks_garbled(text):
     printable = sum(1 for ch in text if ch.isprintable())
     ratio = printable / max(1, len(text))
     return ratio < 0.85
+
+
+def _whisper_transcription_fallback(audio_file):
+    global asr_pipeline
+    try:
+        if asr_pipeline is None:
+            from transformers import pipeline
+
+            asr_pipeline = pipeline(
+                task="automatic-speech-recognition",
+                model="openai/whisper-small",
+                device=0 if torch.cuda.is_available() else -1,
+            )
+        result = asr_pipeline(audio_file)
+        if isinstance(result, dict):
+            text = str(result.get("text", "")).strip()
+            if text:
+                return text
+        return ""
+    except Exception:
+        return ""
 
 
 def _select_chat_template(processor_obj):
@@ -252,6 +274,13 @@ def transcribe(audio_file, prompt, selected_model_id):
         if decoded_outputs:
             cleaned_text = _clean_generated_text(decoded_outputs[0])
             if _looks_garbled(cleaned_text):
+                whisper_text = _whisper_transcription_fallback(audio_file)
+                if whisper_text:
+                    return (
+                        f"[Modell: {loaded_model_id}]\n"
+                        "[Hinweis: Voxtral-Fallback-Ausgabe war ungueltig, Whisper-Transkription wurde verwendet.]\n\n"
+                        f"{whisper_text}"
+                    )
                 return (
                     "Fehler bei der Verarbeitung: Das Modell hat im Fallback-Modus ungueltige Ausgabe erzeugt.\n\n"
                     "Bitte versuchen Sie:\n"
