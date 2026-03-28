@@ -103,21 +103,6 @@ Voxtral-UI-Pinokio/
 
 ### Common Issues
 
-**Known upstream compatibility issue (Transformers + Voxtral)**
-- **Suggested issue title**: `Voxtral Transformers path: chat template fails ("Can't compile non template nodes") and fallback output is garbled`
-- **Typical symptoms**:
-  - `Can't compile non template nodes`
-  - `name 'TranscriptionRequest' is not defined`
-  - garbled output containing repeated `[TOOL_CALLS]`
-- **Where to report it**:
-  - This project (integration/package issue): [Open an issue in this repository](https://github.com/PierrunoYT/Voxtral-UI-Pinokio/issues/new)
-  - Transformers implementation issue: [Open an issue in huggingface/transformers](https://github.com/huggingface/transformers/issues/new/choose)
-  - Model-level discussion: [Voxtral-Mini discussions](https://huggingface.co/mistralai/Voxtral-Mini-3B-2507/discussions)
-- **What to include in the report**:
-  - OS + GPU + Python version
-  - `transformers`, `torch`, `torchvision`, `torchaudio`, `mistral-common` versions
-  - Full traceback and a short audio sample + prompt used
-
 **Slow responses on CPU**
 - This is normal - CPU inference is much slower than GPU
 - Audio models are particularly compute-intensive
