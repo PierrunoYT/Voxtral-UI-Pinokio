@@ -8,7 +8,7 @@ module.exports = {
         message: "pip install uv"
       }
     },
-    // Install basic requirements first (gradio, openai, etc.)
+    // Install core Python requirements
     {
       method: "shell.run",
       params: {
@@ -16,15 +16,7 @@ module.exports = {
         message: "uv pip install -r requirements.txt"
       }
     },
-    // Install mistral-common with audio support
-    {
-      method: "shell.run",
-      params: {
-        venv: "env",
-        message: "pip install --upgrade \"mistral-common[audio]\""
-      }
-    },
-    // Install PyTorch with GPU support before vLLM to ensure compatibility
+    // Install PyTorch with optional GPU support
     {
       method: "script.start",
       params: {
@@ -38,12 +30,12 @@ module.exports = {
         }
       }
     },
-    // Install vLLM from PyPI (stable version) for Windows compatibility
+    // Ensure a recent Transformers stack with Voxtral support
     {
       method: "shell.run",
       params: {
         venv: "env",
-        message: "pip install vllm"
+        message: "uv pip install --upgrade \"transformers>=4.56.0\" \"accelerate>=0.34.0\" safetensors soundfile sentencepiece"
       }
     },
     // Create installation completion marker
@@ -51,7 +43,7 @@ module.exports = {
       method: "fs.write",
       params: {
         path: "INSTALLATION_COMPLETE.txt",
-        text: "Voxtral installation completed successfully.\n\nNext steps:\n1. Start the vLLM server using the Start button\n2. Open the web interface at the provided URL\n3. Begin interacting with Voxtral for audio understanding\n\nFeatures:\n- Voxtral Large Audio-Language Model\n- Speech, sound, and music understanding\n- Audio transcription and translation\n- Direct audio Q&A interactions\n- Gradio web interface\n- GPU acceleration (if available)\n- PyTorch with CUDA support (if NVIDIA GPU detected)\n\nFor support, check the README.md file.\n\nNote: The vLLM server will download the Voxtral model on first use.\n\nIMPORTANT: vLLM may have limited Windows support. For best results, use Linux or WSL."
+        text: "Voxtral installation completed successfully.\n\nNext steps:\n1. Start the app using the Start button\n2. Open the web interface at the provided URL\n3. Begin interacting with Voxtral for audio understanding\n\nFeatures:\n- Voxtral Large Audio-Language Model\n- Speech, sound, and music understanding\n- Audio transcription and translation\n- Direct audio Q&A interactions\n- Gradio web interface\n- GPU acceleration (if available)\n- Transformers backend (no vLLM required)\n\nFor support, check the README.md file.\n\nNote: The model is downloaded automatically on first use."
       }
     }
   ]

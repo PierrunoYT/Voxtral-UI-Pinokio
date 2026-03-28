@@ -1,7 +1,5 @@
 # Voxtral UI Pinokio
 
-> **⚠️ IMPORTANT NOTICE**: This package is currently not working due to vLLM compatibility issues. We are working on resolving these issues. Please check back for updates.
-
 A complete Pinokio installation package for running Mistral AI's Voxtral locally with a beautiful Gradio web interface.
 
 ## 🚀 Features
@@ -10,7 +8,7 @@ A complete Pinokio installation package for running Mistral AI's Voxtral locally
 - **🔊 Multi-Modal Understanding**: Process speech, audio transcription, translation, and direct Q&A interactions
 - **🧠 Audio Intelligence**: Advanced audio comprehension and analysis capabilities
 - **💬 Gradio Interface**: Clean, professional web interface for audio interaction
-- **⚡ GPU Acceleration**: Automatic CUDA support when available with vLLM backend
+- **⚡ GPU Acceleration**: Automatic CUDA support when available with Transformers backend
 - **🔒 Complete Privacy**: Runs entirely offline, no data sent externally
 - **🌐 Cross-Platform**: Windows, macOS, and Linux support
 
@@ -45,7 +43,7 @@ A complete Pinokio installation package for running Mistral AI's Voxtral locally
 
 ## 🎯 Usage
 
-1. **Start the Application**: Click "Start" in Pinokio (this starts both vLLM server and Gradio interface)
+1. **Start the Application**: Click "Start" in Pinokio (this starts the Gradio interface and loads Voxtral directly)
 2. **Open Web Interface**: Click "Open Web UI" when available
 3. **Audio Input**: Upload audio files or use microphone input
 4. **Interact**: Ask questions about the audio content
@@ -61,7 +59,7 @@ A complete Pinokio installation package for running Mistral AI's Voxtral locally
 Voxtral-UI-Pinokio/
 ├── pinokio.js              # Main Pinokio configuration
 ├── install.js              # Installation workflow
-├── start.js                # Application startup (vLLM + Gradio)
+├── start.js                # Application startup (Gradio + Transformers backend)
 ├── update.js               # Update workflow
 ├── reset.js                # Reset/cleanup workflow
 ├── link.js                 # Deduplication workflow
@@ -83,16 +81,15 @@ Voxtral-UI-Pinokio/
 - **Capabilities**: Speech understanding, transcription, translation, Q&A
 
 ### Backend Architecture
-- **vLLM Server**: High-performance inference server running on port 8000
+- **Transformers Backend**: Direct in-process Voxtral inference
 - **Gradio Frontend**: Web interface running on port 7860
-- **Communication**: OpenAI-compatible API between frontend and backend
+- **Communication**: No external inference server required
 
 ### Dependencies
 - PyTorch with CUDA support
-- vLLM with audio support
+- Transformers with Voxtral support
 - Gradio 4.0.0+
-- mistral-common with audio support
-- Transformers, Accelerate, PEFT
+- Accelerate, Torchaudio, SoundFile
 
 ### GPU Support Matrix
 
@@ -122,10 +119,10 @@ Voxtral-UI-Pinokio/
 - Model files download automatically on first use via vLLM
 - Ensure sufficient disk space (~10GB)
 
-**vLLM server fails to start**
-- Check if port 8000 is available
-- Verify CUDA installation for GPU usage
-- Check vLLM logs in the terminal
+**Model fails to load**
+- Verify that your GPU drivers and CUDA-compatible PyTorch are installed
+- Ensure sufficient RAM/VRAM for the selected model
+- Update dependencies using the Install or Update button
 
 **Audio upload errors**
 - Supported formats: WAV, MP3, FLAC, OGG, M4A
@@ -165,7 +162,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🙏 Acknowledgments
 
 - [Mistral AI](https://mistral.ai/) for the Voxtral model
-- [vLLM](https://github.com/vllm-project/vllm) for the high-performance inference backend
+- [Hugging Face Transformers](https://github.com/huggingface/transformers) for local Voxtral inference
 - [Gradio](https://gradio.app/) for the web interface framework
 - [Pinokio](https://pinokio.computer/) for the package management system
 

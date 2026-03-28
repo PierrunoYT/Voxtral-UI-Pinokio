@@ -1,47 +1,91 @@
+import os
+import traceback
+
 import gradio as gr
-from mistral_common.protocol.instruct.messages import AudioChunk, UserMessage
-from mistral_common.audio import Audio
-from openai import OpenAI
+import torch
+from transformers import AutoProcessor, VoxtralForConditionalGeneration
 
-BASE_URL = "http://127.0.0.1:8000/v1"
-client = OpenAI(api_key="EMPTY", base_url=BASE_URL)
+MODEL_ID = os.environ.get("VOXTRAL_MODEL_ID", "mistralai/Voxtral-Mini-3B-2507")
+MAX_NEW_TOKENS = int(os.environ.get("VOXTRAL_MAX_NEW_TOKENS", "384"))
 
-def get_model_id():
+device = "cuda" if torch.cuda.is_available() else "cpu"
+torch_dtype = torch.float16 if device == "cuda" else torch.float32
+
+processor = None
+model = None
+load_error = None
+
+
+def load_model():
+    global processor, model, load_error
+    if model is not None or load_error is not None:
+        return
+
     try:
-        models = client.models.list()
-        if models.data:
-            return models.data[0].id
-        else:
-            return "mistralai/Voxtral-Mini-3B-2507"  # fallback
-    except:
-        return "mistralai/Voxtral-Mini-3B-2507"  # fallback
+        processor = AutoProcessor.from_pretrained(MODEL_ID)
+        model = VoxtralForConditionalGeneration.from_pretrained(
+            MODEL_ID,
+            torch_dtype=torch_dtype,
+            device_map="auto" if device == "cuda" else None,
+            low_cpu_mem_usage=True,
+        )
+        if device == "cpu":
+            model.to(device)
+    except Exception as exc:
+        load_error = f"{exc}\n\n{traceback.format_exc()}"
+
 
 def transcribe(audio_file, prompt):
     if audio_file is None:
         return "Bitte laden Sie eine Audiodatei hoch."
-    
+
     if not prompt:
-        prompt = "Was hörst du in dieser Audiodatei?"
-    
-    try:
-        model_id = get_model_id()
-        audio_chunk = AudioChunk.from_audio(Audio.from_file(audio_file, strict=False))
-        user_msg = UserMessage(content=[audio_chunk, {"text": prompt}]).to_openai()
-        
-        response = client.chat.completions.create(
-            model=model_id,
-            messages=[user_msg],
-            temperature=0.2,
-            top_p=0.95
+        prompt = "Was hoerst du in dieser Audiodatei?"
+
+    load_model()
+    if load_error:
+        return (
+            "Fehler beim Laden des Voxtral-Modells.\n\n"
+            "Pruefen Sie Ihre GPU/RAM-Ressourcen und die installierten Abhaengigkeiten.\n\n"
+            f"Details:\n{load_error}"
         )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"Fehler bei der Verarbeitung: {str(e)}\n\nStellen Sie sicher, dass der vLLM-Server läuft."
+
+    try:
+        conversation = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "audio", "path": audio_file},
+                    {"type": "text", "text": prompt},
+                ],
+            }
+        ]
+
+        inputs = processor.apply_chat_template(conversation)
+        if device == "cuda":
+            inputs = inputs.to(model.device, dtype=torch_dtype)
+        else:
+            inputs = inputs.to(model.device)
+
+        with torch.inference_mode():
+            outputs = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS)
+
+        generated_tokens = outputs[:, inputs.input_ids.shape[1] :]
+        decoded_outputs = processor.batch_decode(
+            generated_tokens,
+            skip_special_tokens=True,
+        )
+        return decoded_outputs[0] if decoded_outputs else "Keine Antwort generiert."
+    except Exception as exc:
+        return f"Fehler bei der Verarbeitung: {exc}"
 
 # Gradio Interface
 with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
     gr.Markdown("# 🎵 Voxtral Audio-Text Chat")
-    gr.Markdown("Laden Sie Audio hoch und stellen Sie eine Textfrage für Voxtral.")
+    gr.Markdown(
+        "Laden Sie Audio hoch und stellen Sie eine Textfrage fuer Voxtral. "
+        "Diese Version nutzt Transformers direkt (ohne vLLM)."
+    )
     
     with gr.Row():
         with gr.Column():

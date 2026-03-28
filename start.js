@@ -1,38 +1,7 @@
 module.exports = {
   daemon: true,
   run: [
-    // Start vLLM server with Voxtral model
-    {
-      method: "shell.run",
-      params: {
-        venv: "env",
-        env: {
-          CUDA_VISIBLE_DEVICES: "0"
-        },
-        message: "vllm serve mistralai/Voxtral-Mini-3B-2507 --tokenizer_mode mistral --config_format mistral --load_format mistral --host 127.0.0.1 --port 8000",
-        on: [{
-          // Wait for vLLM server to start
-          event: "/INFO.*Application startup complete/",
-          done: true
-        }, {
-          // Alternative startup pattern
-          event: "/INFO.*Uvicorn running on/",
-          done: true
-        }, {
-          // Fallback pattern
-          event: "/Running on.*http:\/\/127\.0\.0\.1:8000/",
-          done: true
-        }]
-      }
-    },
-    // Wait a moment for server to be fully ready
-    {
-      method: "shell.run",
-      params: {
-        message: "timeout 5 2>nul || sleep 5"
-      }
-    },
-    // Start Gradio frontend
+    // Start Gradio frontend with in-process Transformers backend
     {
       method: "shell.run",
       params: {
