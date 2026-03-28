@@ -78,6 +78,15 @@ def load_model(selected_model_id):
         from transformers import AutoProcessor, VoxtralForConditionalGeneration
 
         processor = AutoProcessor.from_pretrained(selected_model_id)
+        tokenizer = getattr(processor, "tokenizer", None)
+        if tokenizer is not None and tokenizer.pad_token is None:
+            # Some Voxtral tokenizer variants ship without pad_token.
+            # For single-sample inference, EOS padding is a safe fallback.
+            if tokenizer.eos_token is not None:
+                tokenizer.pad_token = tokenizer.eos_token
+            elif tokenizer.unk_token is not None:
+                tokenizer.pad_token = tokenizer.unk_token
+
         model = VoxtralForConditionalGeneration.from_pretrained(
             selected_model_id,
             torch_dtype=torch_dtype,
@@ -86,6 +95,9 @@ def load_model(selected_model_id):
         )
         if device == "cpu":
             model.to(device)
+        if tokenizer is not None and getattr(model, "config", None) is not None:
+            if getattr(model.config, "pad_token_id", None) is None and tokenizer.pad_token_id is not None:
+                model.config.pad_token_id = tokenizer.pad_token_id
         loaded_model_id = selected_model_id
     except Exception as exc:
         load_error = f"{exc}\n\n{traceback.format_exc()}"
@@ -177,7 +189,7 @@ def transcribe(audio_file, prompt, selected_model_id):
                             inputs = processor(
                                 **call_kwargs,
                                 return_tensors="pt",
-                                padding=True,
+                                padding=False,
                             )
                             break
                         except Exception as direct_exc:
