@@ -1,4 +1,5 @@
 import os
+import re
 import traceback
 
 import gradio as gr
@@ -18,6 +19,22 @@ processor = None
 model = None
 load_error = None
 loaded_model_id = None
+
+
+def _clean_generated_text(text):
+    cleaned = text.replace("[TOOL_CALLS]", " ").strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned
+
+
+def _looks_garbled(text):
+    if not text:
+        return True
+    if text.count("[TOOL_CALLS]") > 2:
+        return True
+    printable = sum(1 for ch in text if ch.isprintable())
+    ratio = printable / max(1, len(text))
+    return ratio < 0.85
 
 
 def _select_chat_template(processor_obj):
@@ -179,7 +196,7 @@ def transcribe(audio_file, prompt, selected_model_id):
                         16000,
                     )
                     waveform, _ = librosa.load(audio_file, sr=sampling_rate, mono=True)
-                    text_prompt = f"<audio>{prompt}"
+                    text_prompt = prompt
 
                     for call_kwargs in (
                         {"text": [text_prompt], "audio": [waveform]},
@@ -210,19 +227,43 @@ def transcribe(audio_file, prompt, selected_model_id):
         else:
             inputs = inputs.to(model.device)
 
+        tokenizer = getattr(processor, "tokenizer", None)
+        eos_token_id = getattr(tokenizer, "eos_token_id", None) if tokenizer is not None else None
+        pad_token_id = getattr(tokenizer, "pad_token_id", None) if tokenizer is not None else None
+
         with torch.inference_mode():
-            outputs = model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS)
+            outputs = model.generate(
+                **inputs,
+                max_new_tokens=MAX_NEW_TOKENS,
+                do_sample=False,
+                temperature=0.0,
+                repetition_penalty=1.1,
+                no_repeat_ngram_size=3,
+                eos_token_id=eos_token_id,
+                pad_token_id=pad_token_id,
+            )
 
         generated_tokens = outputs[:, inputs.input_ids.shape[1] :]
         decoded_outputs = processor.batch_decode(
             generated_tokens,
             skip_special_tokens=True,
+            clean_up_tokenization_spaces=True,
         )
         if decoded_outputs:
+            cleaned_text = _clean_generated_text(decoded_outputs[0])
+            if _looks_garbled(cleaned_text):
+                return (
+                    "Fehler bei der Verarbeitung: Das Modell hat im Fallback-Modus ungueltige Ausgabe erzeugt.\n\n"
+                    "Bitte versuchen Sie:\n"
+                    "- ein kuerzeres/sauberes Audio,\n"
+                    "- das andere Modell im Dropdown,\n"
+                    "- oder Transformers erneut updaten und neu starten.\n\n"
+                    f"Rohausgabe (gekuerzt): {decoded_outputs[0][:400]}"
+                )
             prefix = f"[Modell: {loaded_model_id}]"
             if template_error is not None:
                 prefix += "\n[Hinweis: Chat-Template fehlgeschlagen, Transkriptions-Fallback wurde verwendet.]"
-            return f"{prefix}\n\n{decoded_outputs[0]}"
+            return f"{prefix}\n\n{cleaned_text}"
         return "Keine Antwort generiert."
     except Exception as exc:
         if "Can't compile non template nodes" in str(exc):
