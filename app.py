@@ -72,7 +72,6 @@ def transcribe(audio_file, prompt, selected_model_id):
             "Pruefen Sie Ihre GPU/RAM-Ressourcen und die installierten Abhaengigkeiten.\n\n"
             f"Details:\n{load_error}"
         )
-
     try:
         conversation = [
             {
