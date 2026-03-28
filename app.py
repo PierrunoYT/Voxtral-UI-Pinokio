@@ -119,6 +119,7 @@ def transcribe(audio_file, prompt, selected_model_id):
         ]
 
         template = _select_chat_template(processor)
+        input_build_errors = []
         template_error = None
         try:
             if template:
@@ -140,12 +141,57 @@ def transcribe(audio_file, prompt, selected_model_id):
                 )
         except Exception as exc:
             template_error = exc
-            # Some tokenizer/template combinations on Windows fail in the
-            # tokenizer chat-template compiler. Fallback to transcription path.
-            inputs = processor.apply_transcription_request(
-                audio=audio_file,
-                model_id=loaded_model_id,
-            )
+            input_build_errors.append(f"apply_chat_template failed: {exc}")
+            inputs = None
+
+            # Fallback 1: transcription request helper (if available).
+            if hasattr(processor, "apply_transcription_request"):
+                try:
+                    inputs = processor.apply_transcription_request(
+                        audio=audio_file,
+                        model_id=loaded_model_id,
+                    )
+                except Exception as transcription_exc:
+                    input_build_errors.append(
+                        f"apply_transcription_request failed: {transcription_exc}"
+                    )
+
+            # Fallback 2: direct processor call with loaded waveform.
+            if inputs is None:
+                try:
+                    import librosa  # type: ignore[reportMissingImports]
+
+                    sampling_rate = getattr(
+                        getattr(processor, "feature_extractor", None),
+                        "sampling_rate",
+                        16000,
+                    )
+                    waveform, _ = librosa.load(audio_file, sr=sampling_rate, mono=True)
+                    text_prompt = f"<audio>{prompt}"
+
+                    for call_kwargs in (
+                        {"text": [text_prompt], "audio": [waveform]},
+                        {"text": [text_prompt], "audios": [waveform]},
+                    ):
+                        try:
+                            inputs = processor(
+                                **call_kwargs,
+                                return_tensors="pt",
+                                padding=True,
+                            )
+                            break
+                        except Exception as direct_exc:
+                            input_build_errors.append(
+                                f"processor direct call failed ({list(call_kwargs.keys())}): {direct_exc}"
+                            )
+                except Exception as librosa_exc:
+                    input_build_errors.append(f"librosa/direct audio fallback failed: {librosa_exc}")
+
+            if inputs is None:
+                return (
+                    "Fehler bei der Verarbeitung: Eingaben konnten fuer Voxtral nicht erstellt werden.\n\n"
+                    "Details:\n- " + "\n- ".join(input_build_errors)
+                )
 
         if device == "cuda":
             inputs = inputs.to(model.device, dtype=torch_dtype)
