@@ -35,7 +35,7 @@ module.exports = {
       method: "shell.run",
       params: {
         venv: "env",
-        message: "uv pip install --upgrade \"transformers>=4.56.0\" \"accelerate>=0.34.0\" safetensors soundfile sentencepiece"
+        message: "uv pip install --upgrade \"transformers>=4.56.0\" \"accelerate>=0.34.0\" safetensors soundfile sentencepiece librosa"
       }
     },
     // Create installation completion marker
