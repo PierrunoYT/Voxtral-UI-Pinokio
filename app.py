@@ -20,6 +20,36 @@ load_error = None
 loaded_model_id = None
 
 
+def _select_chat_template(processor_obj):
+    """
+    Some tokenizer configs expose multiple chat templates as a list/dict.
+    Normalize this into a template string for apply_chat_template().
+    """
+    template = getattr(processor_obj, "chat_template", None)
+    if template is None and hasattr(processor_obj, "tokenizer"):
+        template = getattr(processor_obj.tokenizer, "chat_template", None)
+
+    if isinstance(template, str):
+        return template
+
+    if isinstance(template, list):
+        for preferred_name in ("default", "chat", "instruct"):
+            for item in template:
+                if isinstance(item, dict) and item.get("name") == preferred_name and isinstance(item.get("template"), str):
+                    return item["template"]
+        for item in template:
+            if isinstance(item, dict) and isinstance(item.get("template"), str):
+                return item["template"]
+
+    if isinstance(template, dict):
+        for key in ("default", "chat", "instruct", "template"):
+            value = template.get(key)
+            if isinstance(value, str):
+                return value
+
+    return None
+
+
 def load_model(selected_model_id):
     global processor, model, load_error, loaded_model_id
     if selected_model_id not in AVAILABLE_MODELS:
@@ -88,13 +118,35 @@ def transcribe(audio_file, prompt, selected_model_id):
             }
         ]
 
-        inputs = processor.apply_chat_template(
-            conversation,
-            add_generation_prompt=True,
-            tokenize=True,
-            return_tensors="pt",
-            return_dict=True,
-        )
+        template = _select_chat_template(processor)
+        template_error = None
+        try:
+            if template:
+                inputs = processor.apply_chat_template(
+                    conversation,
+                    chat_template=template,
+                    add_generation_prompt=True,
+                    tokenize=True,
+                    return_tensors="pt",
+                    return_dict=True,
+                )
+            else:
+                inputs = processor.apply_chat_template(
+                    conversation,
+                    add_generation_prompt=True,
+                    tokenize=True,
+                    return_tensors="pt",
+                    return_dict=True,
+                )
+        except Exception as exc:
+            template_error = exc
+            # Some tokenizer/template combinations on Windows fail in the
+            # tokenizer chat-template compiler. Fallback to transcription path.
+            inputs = processor.apply_transcription_request(
+                audio=audio_file,
+                model_id=loaded_model_id,
+            )
+
         if device == "cuda":
             inputs = inputs.to(model.device, dtype=torch_dtype)
         else:
@@ -109,14 +161,17 @@ def transcribe(audio_file, prompt, selected_model_id):
             skip_special_tokens=True,
         )
         if decoded_outputs:
-            return f"[Modell: {loaded_model_id}]\n\n{decoded_outputs[0]}"
+            prefix = f"[Modell: {loaded_model_id}]"
+            if template_error is not None:
+                prefix += "\n[Hinweis: Chat-Template fehlgeschlagen, Transkriptions-Fallback wurde verwendet.]"
+            return f"{prefix}\n\n{decoded_outputs[0]}"
         return "Keine Antwort generiert."
     except Exception as exc:
         if "Can't compile non template nodes" in str(exc):
             return (
                 "Fehler bei der Template-Verarbeitung des Modells.\n\n"
-                "Bitte aktualisieren Sie Transformers im env und versuchen Sie es erneut:\n"
-                "uv pip install --upgrade \"transformers>=4.56.0\" \"accelerate>=0.34.0\"\n\n"
+                "Der Fehler tritt in der Tokenizer-Template-Verarbeitung auf.\n"
+                "Die App versucht jetzt automatisch einen Fallback-Modus.\n\n"
                 f"Details: {exc}"
             )
         return f"Fehler bei der Verarbeitung: {exc}"
