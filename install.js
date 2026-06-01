@@ -1,32 +1,28 @@
 module.exports = {
+  requires: {
+    bundle: "ai"
+  },
   run: [
-    // Install UV package manager for faster installations
-    {
-      method: "shell.run",
-      params: {
-        venv: "env",
-        message: "pip install uv"
-      }
-    },
     // Install core Python requirements
     {
       method: "shell.run",
       params: {
         venv: "env",
+        path: "app",
         message: "uv pip install -r requirements.txt"
       }
     },
-    // Install PyTorch with optional GPU support
+    // Install PyTorch (+ optional GPU stack) via shared torch.js
     {
       method: "script.start",
       params: {
         uri: "torch.js",
         params: {
           venv: "env",
+          path: "app",
           xformers: true,
           triton: true,
-          sageattention: true,
-          force_reinstall: true
+          sageattention: true
         }
       }
     },
@@ -35,6 +31,7 @@ module.exports = {
       method: "shell.run",
       params: {
         venv: "env",
+        path: "app",
         message: "uv pip install --upgrade \"transformers>=4.56.0\" \"accelerate>=0.34.0\" safetensors soundfile sentencepiece librosa"
       }
     },

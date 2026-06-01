@@ -361,8 +361,6 @@ with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
     )
 
 if __name__ == "__main__":
-    app.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
-        share=False
-    )
+    # Respect Pinokio-injected GRADIO_SERVER_NAME / GRADIO_SERVER_PORT env vars
+    # so the launcher can pick a free port and bind to 127.0.0.1.
+    app.launch(share=False)

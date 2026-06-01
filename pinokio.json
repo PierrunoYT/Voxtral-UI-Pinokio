@@ -1,0 +1,5 @@
+{
+  "title": "Voxtral UI",
+  "description": "Run Mistral AI's Voxtral locally with a Gradio web interface (Transformers backend, no vLLM required).",
+  "icon": "icon.png"
+}
