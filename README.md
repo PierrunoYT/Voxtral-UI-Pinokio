@@ -32,11 +32,9 @@ Transformers backend directly — no vLLM or external inference server required.
 1. Upload an audio file (or record from a microphone)
 2. Pick a model (Voxtral-Mini-3B by default; Voxtral-Small-24B for higher quality, GPU only)
 3. Enter a question or instruction about the audio
-4. Click **Generieren** to run inference
+4. Click **Generate** to run inference
 
 Models are downloaded and loaded lazily on first use, not at app startup.
-
-> **Note:** The web UI text and error messages are currently German-only.
 
 ## Project Structure
 

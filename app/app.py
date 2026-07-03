@@ -144,28 +144,28 @@ def load_model(selected_model_id):
 
 def transcribe(audio_file, prompt, selected_model_id):
     if audio_file is None:
-        return "Bitte laden Sie eine Audiodatei hoch."
+        return "Please upload an audio file."
 
     if not os.path.isfile(audio_file):
-        return "Fehler: Die hochgeladene Audiodatei konnte nicht gefunden werden. Bitte laden Sie sie erneut hoch."
+        return "Error: The uploaded audio file could not be found. Please upload it again."
 
     if not prompt:
-        prompt = "Was hoerst du in dieser Audiodatei?"
+        prompt = "What do you hear in this audio file?"
 
     if device == "cpu" and "24B" in selected_model_id:
         return (
-            "Das Modell Voxtral-Small-24B benoetigt deutlich mehr Arbeitsspeicher, als auf der "
-            "CPU praktikabel bereitgestellt werden kann (ca. 90GB+ RAM in fp32).\n\n"
-            "Bitte waehlen Sie Voxtral-Mini-3B oder verwenden Sie eine GPU mit ausreichend VRAM."
+            "Voxtral-Small-24B requires significantly more memory than is practical to provide "
+            "on CPU (approx. 90GB+ RAM in fp32).\n\n"
+            "Please select Voxtral-Mini-3B, or use a GPU with sufficient VRAM."
         )
 
     load_model(selected_model_id)
     if load_error:
         return (
-            "Fehler beim Laden des Voxtral-Modells.\n\n"
-            "Pruefen Sie Ihre GPU/RAM-Ressourcen und die installierten Abhaengigkeiten.\n\n"
-            "Falls Sie einen torchvision/torch Fehler sehen (z.B. 'operator torchvision::nms does not exist'),\n"
-            "fuehren Sie in Pinokio bitte Reset + Install erneut aus, damit passende Torch-Pakete neu installiert werden.\n\n"
+            "Failed to load the Voxtral model.\n\n"
+            "Check your GPU/RAM resources and installed dependencies.\n\n"
+            "If you see a torchvision/torch error (e.g. 'operator torchvision::nms does not exist'),\n"
+            "run Reset + Install again in Pinokio so matching Torch packages get reinstalled.\n\n"
             f"Details:\n{load_error}"
         )
     try:
@@ -250,7 +250,7 @@ def transcribe(audio_file, prompt, selected_model_id):
 
             if inputs is None:
                 return (
-                    "Fehler bei der Verarbeitung: Eingaben konnten fuer Voxtral nicht erstellt werden.\n\n"
+                    "Processing error: Could not build inputs for Voxtral.\n\n"
                     "Details:\n- " + "\n- ".join(input_build_errors)
                 )
 
@@ -287,80 +287,80 @@ def transcribe(audio_file, prompt, selected_model_id):
                 whisper_text = _whisper_transcription_fallback(audio_file)
                 if whisper_text:
                     return (
-                        f"[Modell: {loaded_model_id}]\n"
-                        "[Hinweis: Voxtral-Fallback-Ausgabe war ungueltig, Whisper-Transkription wurde verwendet.]\n\n"
+                        f"[Model: {loaded_model_id}]\n"
+                        "[Note: Voxtral fallback output was invalid, Whisper transcription was used instead.]\n\n"
                         f"{whisper_text}"
                     )
                 return (
-                    "Fehler bei der Verarbeitung: Das Modell hat im Fallback-Modus ungueltige Ausgabe erzeugt.\n\n"
-                    "Bitte versuchen Sie:\n"
-                    "- ein kuerzeres/sauberes Audio,\n"
-                    "- das andere Modell im Dropdown,\n"
-                    "- oder Transformers erneut updaten und neu starten.\n\n"
-                    f"Rohausgabe (gekuerzt): {decoded_outputs[0][:400]}"
+                    "Processing error: The model produced invalid output in fallback mode.\n\n"
+                    "Please try:\n"
+                    "- a shorter/cleaner audio clip,\n"
+                    "- the other model in the dropdown,\n"
+                    "- or updating Transformers and restarting.\n\n"
+                    f"Raw output (truncated): {decoded_outputs[0][:400]}"
                 )
-            prefix = f"[Modell: {loaded_model_id}]"
+            prefix = f"[Model: {loaded_model_id}]"
             if template_error is not None:
-                prefix += "\n[Hinweis: Chat-Template fehlgeschlagen, Transkriptions-Fallback wurde verwendet.]"
+                prefix += "\n[Note: Chat template failed, transcription fallback was used instead.]"
             return f"{prefix}\n\n{cleaned_text}"
-        return "Keine Antwort generiert."
+        return "No response generated."
     except Exception as exc:
         if "Can't compile non template nodes" in str(exc):
             return (
-                "Fehler bei der Template-Verarbeitung des Modells.\n\n"
-                "Der Fehler tritt in der Tokenizer-Template-Verarbeitung auf.\n"
-                "Die App versucht jetzt automatisch einen Fallback-Modus.\n\n"
+                "Error processing the model's template.\n\n"
+                "This error occurs in the tokenizer's chat-template processing.\n"
+                "The app is now automatically trying a fallback mode.\n\n"
                 f"Details: {exc}"
             )
-        return f"Fehler bei der Verarbeitung: {exc}"
+        return f"Processing error: {exc}"
 
 # Gradio Interface
 with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
     gr.Markdown("# 🎵 Voxtral Audio-Text Chat")
     gr.Markdown(
-        "Laden Sie Audio hoch und stellen Sie eine Textfrage fuer Voxtral. "
-        "Diese Version nutzt Transformers direkt (ohne vLLM)."
+        "Upload audio and ask a text question for Voxtral. "
+        "This version uses Transformers directly (no vLLM)."
     )
     gr.Markdown(
-        "Modelle werden erst beim Klick auf **Generieren** geladen bzw. heruntergeladen "
-        "(nicht beim App-Start)."
+        "Models are only loaded/downloaded when you click **Generate** "
+        "(not at app startup)."
     )
-    
+
     with gr.Row():
         with gr.Column():
             model_select = gr.Dropdown(
-                label="Voxtral Modell",
+                label="Voxtral Model",
                 choices=AVAILABLE_MODELS,
                 value=DEFAULT_MODEL_ID if DEFAULT_MODEL_ID in AVAILABLE_MODELS else AVAILABLE_MODELS[0],
                 interactive=True,
             )
             audio_input = gr.Audio(
-                label="Audio hochladen", 
+                label="Upload Audio",
                 type="filepath",
                 sources=["upload", "microphone"]
             )
             prompt_input = gr.Textbox(
-                label="Ihre Frage zum Audio",
-                placeholder="Was hörst du in dieser Audiodatei?",
+                label="Your Question About the Audio",
+                placeholder="What do you hear in this audio file?",
                 lines=3
             )
-            submit_btn = gr.Button("Generieren", variant="primary")
-        
+            submit_btn = gr.Button("Generate", variant="primary")
+
         with gr.Column():
             output = gr.Textbox(
-                label="Voxtral Antwort",
+                label="Voxtral Response",
                 lines=10,
                 interactive=False
             )
-    
+
     # Examples
-    gr.Markdown("### Beispiel-Prompts:")
+    gr.Markdown("### Example Prompts:")
     gr.Markdown("""
-    - "Transkribiere dieses Audio."
-    - "Was für Musik ist das?"
-    - "Welche Emotionen hörst du?"
-    - "Beschreibe die Geräusche im Detail."
-    - "Übersetze das gesprochene ins Deutsche."
+    - "Transcribe this audio."
+    - "What kind of music is this?"
+    - "What emotions do you hear?"
+    - "Describe the sounds in detail."
+    - "Translate the speech into English."
     """)
     
     submit_btn.click(
