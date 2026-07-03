@@ -1,6 +1,8 @@
 module.exports = {
   run: [
     // windows nvidia 50 series
+    // Note: xformers is intentionally omitted here (unlike the generic windows-nvidia
+    // branch below) because xformers wheels lag behind cu128/Blackwell support.
     {
       "when": "{{platform === 'win32' && gpu === 'nvidia' && kernel.gpus && kernel.gpus.find(x => / 50.+/.test(x.model))}}",
       "method": "shell.run",
@@ -64,6 +66,8 @@ module.exports = {
       "next": null
     },
     // linux nvidia 50 series
+    // Note: triton is intentionally omitted here (unlike xformers on windows) since
+    // recent torch builds bundle a compatible triton on Linux already.
     {
       "when": "{{platform === 'linux' && gpu === 'nvidia' && kernel.gpus && kernel.gpus.find(x => / 50.+/.test(x.model))}}",
       "method": "shell.run",

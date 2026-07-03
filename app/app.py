@@ -146,8 +146,18 @@ def transcribe(audio_file, prompt, selected_model_id):
     if audio_file is None:
         return "Bitte laden Sie eine Audiodatei hoch."
 
+    if not os.path.isfile(audio_file):
+        return "Fehler: Die hochgeladene Audiodatei konnte nicht gefunden werden. Bitte laden Sie sie erneut hoch."
+
     if not prompt:
         prompt = "Was hoerst du in dieser Audiodatei?"
+
+    if device == "cpu" and "24B" in selected_model_id:
+        return (
+            "Das Modell Voxtral-Small-24B benoetigt deutlich mehr Arbeitsspeicher, als auf der "
+            "CPU praktikabel bereitgestellt werden kann (ca. 90GB+ RAM in fp32).\n\n"
+            "Bitte waehlen Sie Voxtral-Mini-3B oder verwenden Sie eine GPU mit ausreichend VRAM."
+        )
 
     load_model(selected_model_id)
     if load_error:
@@ -358,9 +368,12 @@ with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
         inputs=[audio_input, prompt_input, model_select],
         outputs=output,
         show_progress="full",
+        concurrency_limit=1,
     )
 
 if __name__ == "__main__":
     # Respect Pinokio-injected GRADIO_SERVER_NAME / GRADIO_SERVER_PORT env vars
     # so the launcher can pick a free port and bind to 127.0.0.1.
-    app.launch(share=False)
+    # concurrency_limit=1 on the click handler above serializes requests since
+    # model/processor are shared global state that isn't safe for concurrent access.
+    app.queue().launch(share=False)

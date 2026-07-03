@@ -26,15 +26,6 @@ module.exports = {
         }
       }
     },
-    // Ensure a recent Transformers stack with Voxtral support
-    {
-      method: "shell.run",
-      params: {
-        venv: "env",
-        path: "app",
-        message: "uv pip install --upgrade \"transformers>=4.56.0\" \"accelerate>=0.34.0\" safetensors soundfile sentencepiece librosa"
-      }
-    },
     // Create installation completion marker
     {
       method: "fs.write",

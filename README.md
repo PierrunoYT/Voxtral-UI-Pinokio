@@ -1,175 +1,80 @@
-# Voxtral UI Pinokio
+# Voxtral UI (Pinokio)
 
-A complete Pinokio installation package for running Mistral AI's Voxtral locally with a beautiful Gradio web interface.
+Run Mistral AI's [Voxtral](https://mistral.ai/) audio-language model locally through a Gradio web
+interface, packaged as a one-click [Pinokio](https://pinokio.computer/) app. Uses the Hugging Face
+Transformers backend directly — no vLLM or external inference server required.
 
-## 🚀 Features
+## Features
 
-- **🎵 Voxtral Model**: Mistral AI's state-of-the-art audio model with advanced speech understanding capabilities
-- **🔊 Multi-Modal Understanding**: Process speech, audio transcription, translation, and direct Q&A interactions
-- **🧠 Audio Intelligence**: Advanced audio comprehension and analysis capabilities
-- **💬 Gradio Interface**: Clean, professional web interface for audio interaction
-- **⚡ GPU Acceleration**: Automatic CUDA support when available with Transformers backend
-- **🔒 Complete Privacy**: Runs entirely offline, no data sent externally
-- **🌐 Cross-Platform**: Windows, macOS, and Linux support
+- Local, offline inference with Mistral's Voxtral models
+- Audio Q&A, transcription, and translation from a simple web UI
+- Automatic GPU detection (CUDA) with CPU fallback
+- Automatic Whisper fallback if Voxtral's chat-template path produces garbled output
+- Cross-platform Pinokio scripts (Windows, Linux, macOS) with GPU-specific PyTorch installs
 
-## 📋 Requirements
+## Requirements
 
-- **RAM**: 16GB+ (32GB+ recommended for optimal performance)
-- **Storage**: ~10GB for model files (downloaded automatically)
-- **GPU**: Highly recommended (9GB+ VRAM for best performance)
+- **RAM**: 16GB+ (32GB+ recommended)
+- **GPU**: Recommended, 9GB+ VRAM for Voxtral-Mini-3B. Voxtral-Small-24B requires a GPU — it
+  is not practical to run on CPU.
+- **Storage**: ~10GB for model files (downloaded automatically on first use)
 - **OS**: Windows 10/11, macOS, or Linux
-- **Audio**: Microphone or audio files for input
 
-## 🛠️ Installation
-
-### Via Pinokio (Recommended)
+## Installation
 
 1. Install [Pinokio](https://pinokio.computer/)
-2. Open Pinokio and navigate to "Discover"
-3. Search for "Voxtral UI" or paste this repository URL
-4. Click "Install" and wait for the installation to complete
-5. Click "Start" to launch Voxtral
-6. Open the web interface when it becomes available
+2. In Pinokio, open **Discover** and add this repository, or paste the repo URL directly
+3. Click **Install** and wait for setup to finish
+4. Click **Start**, then **Open Web UI**
 
-### Manual Installation
+## Usage
 
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/your-username/Voxtral-UI-Pinokio.git
-   cd Voxtral-UI-Pinokio
-   ```
+1. Upload an audio file (or record from a microphone)
+2. Pick a model (Voxtral-Mini-3B by default; Voxtral-Small-24B for higher quality, GPU only)
+3. Enter a question or instruction about the audio
+4. Click **Generieren** to run inference
 
-2. Install Pinokio and run the installation script through the Pinokio interface
+Models are downloaded and loaded lazily on first use, not at app startup.
 
-## 🎯 Usage
+> **Note:** The web UI text and error messages are currently German-only.
 
-1. **Start the Application**: Click "Start" in Pinokio (this starts the Gradio interface and loads Voxtral directly)
-2. **Open Web Interface**: Click "Open Web UI" when available
-3. **Audio Input**: Upload audio files or use microphone input
-4. **Interact**: Ask questions about the audio content
-5. **Advanced Features**:
-   - Audio transcription
-   - Audio translation
-   - Direct Q&A with audio content
-   - Multi-language support
-
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 Voxtral-UI-Pinokio/
-├── pinokio.js              # Main Pinokio configuration
-├── install.js              # Installation workflow
-├── start.js                # Application startup (Gradio + Transformers backend)
-├── update.js               # Update workflow
-├── reset.js                # Reset/cleanup workflow
-├── link.js                 # Deduplication workflow
-├── torch.js                # PyTorch installation
-├── app.py                  # Main Gradio application
-├── requirements.txt        # Python dependencies
-├── icon.png                # Project icon
-├── README.md               # This file
-└── env/                    # Created during installation
-    └── ...                 # Python virtual environment
+├── pinokio.js        # Menu/UI state machine
+├── pinokio.json       # Package metadata
+├── install.js         # Installs Python deps + PyTorch
+├── start.js            # Launches the Gradio app (daemon)
+├── update.js            # git pull
+├── reset.js               # Removes the venv + install marker
+├── link.js                 # Deduplicates shared venv files
+├── torch.js                 # Platform/GPU-specific PyTorch install logic
+├── icon.png
+└── app/
+    ├── app.py           # Gradio + Transformers Voxtral inference
+    └── requirements.txt
 ```
 
-## 🔧 Technical Details
+## Troubleshooting
 
-### Model Information
-- **Model**: mistralai/Voxtral-Mini-3B-2507 (default)
-- **Alternative**: mistralai/Voxtral-Small-24B-2507 (for better performance)
-- **Type**: Large Audio-Language Model
-- **Capabilities**: Speech understanding, transcription, translation, Q&A
+**Chat template errors / garbled output** — Some Voxtral + Transformers version combinations hit
+`Can't compile non template nodes` or produce repeated `[TOOL_CALLS]` tokens. The app already
+falls back automatically (transcription-request API, then a direct processor call, then a Whisper
+ASR fallback) — if all of those fail, try updating dependencies via Pinokio's **Update** button.
 
-### Backend Architecture
-- **Transformers Backend**: Direct in-process Voxtral inference
-- **Gradio Frontend**: Web interface running on port 7860
-- **Communication**: No external inference server required
+**Out of memory** — Use a shorter audio clip, switch to Voxtral-Mini-3B, or free up VRAM/RAM by
+closing other applications.
 
-### Dependencies
-- PyTorch with CUDA support
-- Transformers with Voxtral support
-- Gradio 4.0.0+
-- Accelerate, Torchaudio, SoundFile
+**`operator torchvision::nms does not exist` or similar torch/torchvision errors** — Run **Reset**
+then **Install** again in Pinokio to reinstall a matching PyTorch stack.
 
-### GPU Support Matrix
+**Slow responses on CPU** — Expected; audio models are compute-intensive. Prefer a GPU with 9GB+
+VRAM.
 
-| Platform | NVIDIA | AMD | CPU |
-|----------|--------|-----|-----|
-| Windows | CUDA 12.8 + XFormers + Triton | DirectML | CPU-only |
-| Linux | CUDA 12.8 + XFormers + SageAttention | ROCm 6.2.4 | CPU-only |
-| macOS | N/A | N/A | CPU + Metal |
+## Acknowledgments
 
-## 🚨 Troubleshooting
-
-### Common Issues
-
-**Slow responses on CPU**
-- This is normal - CPU inference is much slower than GPU
-- Audio models are particularly compute-intensive
-- Consider using a GPU with 9GB+ VRAM for optimal performance
-
-**Out of memory errors**
-- Audio models require significant memory
-- Close other applications to free RAM/VRAM
-- Use shorter audio clips
-- Consider CPU mode if GPU memory is insufficient
-
-**Model download fails**
-- Check internet connection
-- Model files download automatically on first use
-- Ensure sufficient disk space (~10GB)
-
-**Model fails to load**
-- Verify that your GPU drivers and CUDA-compatible PyTorch are installed
-- Ensure sufficient RAM/VRAM for the selected model
-- Update dependencies using the Install or Update button
-
-**Audio upload errors**
-- Supported formats: WAV, MP3, FLAC, OGG, M4A
-- Try converting to WAV format if issues persist
-- Check file size limitations
-
-### Performance Tips
-
-- **GPU Users**: Use NVIDIA GPU with 9GB+ VRAM for best experience
-- **CPU Users**: Use shorter audio clips and be patient with processing
-- **Memory**: Close unnecessary applications during use
-- **Audio Quality**: Higher quality audio may provide better results
-
-## 🔄 Updates
-
-The package includes an automatic update system:
-
-1. Click "Update" in the Pinokio interface
-2. Wait for dependencies and model updates to complete
-3. Restart the application to use the latest version
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit issues, feature requests, or pull requests.
-
-### Development Setup
-
-1. Fork this repository
-2. Make your changes to the Pinokio scripts or Gradio interface
-3. Test thoroughly on your target platform
-4. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- [Mistral AI](https://mistral.ai/) for the Voxtral model
-- [Hugging Face Transformers](https://github.com/huggingface/transformers) for local Voxtral inference
-- [Gradio](https://gradio.app/) for the web interface framework
-- [Pinokio](https://pinokio.computer/) for the package management system
-
-## 📞 Support
-
-For issues related to:
-- **Voxtral Model**: Visit [Mistral AI documentation](https://docs.mistral.ai/)
-- **Installation Problems**: Use the Reset option and try reinstalling
-- **Performance Issues**: Check system requirements and GPU compatibility
-- **Audio Processing**: Ensure supported audio formats and sufficient memory
+- [Mistral AI](https://mistral.ai/) for Voxtral
+- [Hugging Face Transformers](https://github.com/huggingface/transformers)
+- [Gradio](https://gradio.app/)
+- [Pinokio](https://pinokio.computer/)
