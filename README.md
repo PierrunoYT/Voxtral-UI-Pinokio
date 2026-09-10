@@ -17,7 +17,8 @@ Transformers backend directly — no vLLM or external inference server required.
 - **RAM**: 16GB+ (32GB+ recommended)
 - **GPU**: Recommended, 9GB+ VRAM for Voxtral-Mini-3B. Voxtral-Small-24B requires a GPU — it
   is not practical to run on CPU.
-- **Storage**: ~10GB for model files (downloaded automatically on first use)
+- **Storage**: ~10GB for Voxtral-Mini-3B, ~55GB for Voxtral-Small-24B (downloaded
+  automatically on first use, into the Hugging Face cache)
 - **OS**: Windows 10/11, macOS, or Linux
 
 ## Installation
@@ -40,19 +41,30 @@ Models are downloaded and loaded lazily on first use, not at app startup.
 
 ```
 Voxtral-UI-Pinokio/
-├── pinokio.js        # Menu/UI state machine
-├── pinokio.json       # Package metadata
-├── install.js         # Installs Python deps + PyTorch
-├── start.js            # Launches the Gradio app (daemon)
-├── update.js            # git pull
-├── reset.js               # Removes the venv + install marker
-├── link.js                 # Deduplicates shared venv files
-├── torch.js                 # Platform/GPU-specific PyTorch install logic
+├── pinokio.js       # Menu/UI state machine
+├── pinokio.json     # Package metadata
+├── install.js       # Installs Python deps + PyTorch
+├── start.js         # Launches the Gradio app (daemon)
+├── update.js        # git pull + dependency refresh
+├── reset.js         # Removes the venv + install marker
+├── link.js          # Deduplicates shared venv files
+├── torch.js         # Platform/GPU-specific PyTorch install logic
 ├── icon.png
 └── app/
     ├── app.py           # Gradio + Transformers Voxtral inference
     └── requirements.txt
 ```
+
+## Configuration
+
+The app reads these optional environment variables at startup:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `VOXTRAL_MODEL_ID` | `mistralai/Voxtral-Mini-3B-2507` | Model preselected in the dropdown |
+| `VOXTRAL_MAX_NEW_TOKENS` | `384` | Generation length cap |
+| `GRADIO_SERVER_NAME` | `127.0.0.1` | Bind address |
+| `GRADIO_SERVER_PORT` | auto | Fixed port; unset lets Gradio pick a free one |
 
 ## Troubleshooting
 
