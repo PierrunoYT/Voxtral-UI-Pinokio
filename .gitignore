@@ -1,0 +1,13 @@
+# Pinokio-managed install artifacts
+app/env/
+INSTALLATION_COMPLETE.txt
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Agent/editor tooling
+.claude/
+.codex/
+.gemini/
+.open-edit/

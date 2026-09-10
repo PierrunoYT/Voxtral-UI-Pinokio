@@ -1,6 +1,9 @@
 gradio>=4.0.0
 transformers>=4.56.0
 accelerate>=0.34.0
+# Voxtral's processor/tokenizer is backed by mistral-common; the [audio] extra
+# pulls in the audio chunk handling AutoProcessor needs for Voxtral.
+mistral-common[audio]>=1.8.0
 numpy
 safetensors
 soundfile
