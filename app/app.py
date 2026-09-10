@@ -1,3 +1,4 @@
+import gc
 import os
 import re
 import traceback
@@ -10,7 +11,21 @@ AVAILABLE_MODELS = [
     "mistralai/Voxtral-Mini-3B-2507",
     "mistralai/Voxtral-Small-24B-2507",
 ]
-MAX_NEW_TOKENS = int(os.environ.get("VOXTRAL_MAX_NEW_TOKENS", "384"))
+
+
+def _env_int(name, default):
+    """Read an int from the environment, ignoring unset/blank/invalid values."""
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+MAX_NEW_TOKENS = _env_int("VOXTRAL_MAX_NEW_TOKENS", 384)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 torch_dtype = torch.float16 if device == "cuda" else torch.float32
@@ -28,10 +43,15 @@ def _clean_generated_text(text):
     return cleaned
 
 
-def _looks_garbled(text):
-    if not text:
+def _looks_garbled(text, raw_text=None):
+    """
+    Detect unusable generations. ``raw_text`` is the pre-cleanup output: the
+    ``[TOOL_CALLS]`` marker is stripped by _clean_generated_text(), so counting
+    it on the cleaned text would never match.
+    """
+    if raw_text is not None and raw_text.count("[TOOL_CALLS]") > 2:
         return True
-    if text.count("[TOOL_CALLS]") > 2:
+    if not text:
         return True
     printable = sum(1 for ch in text if ch.isprintable())
     ratio = printable / max(1, len(text))
@@ -50,10 +70,15 @@ def _whisper_transcription_fallback(audio_file):
                 device=0 if torch.cuda.is_available() else -1,
             )
         result = asr_pipeline(audio_file)
+        if isinstance(result, list):
+            # Chunked pipelines return one dict per chunk.
+            result = result[0] if result else None
         if isinstance(result, dict):
             text = str(result.get("text", "")).strip()
             if text:
                 return text
+        if isinstance(result, str):
+            return result.strip()
         return ""
     except Exception:
         return ""
@@ -89,25 +114,32 @@ def _select_chat_template(processor_obj):
     return None
 
 
+def _normalize_model_id(selected_model_id):
+    """Map an arbitrary dropdown value onto a known model id."""
+    if isinstance(selected_model_id, str) and selected_model_id in AVAILABLE_MODELS:
+        return selected_model_id
+    if DEFAULT_MODEL_ID in AVAILABLE_MODELS:
+        return DEFAULT_MODEL_ID
+    return AVAILABLE_MODELS[0]
+
+
 def load_model(selected_model_id):
     global processor, model, load_error, loaded_model_id
-    if selected_model_id not in AVAILABLE_MODELS:
-        selected_model_id = DEFAULT_MODEL_ID
+    selected_model_id = _normalize_model_id(selected_model_id)
 
     # Only reuse when the model is already loaded successfully.
     if loaded_model_id == selected_model_id and model is not None and load_error is None:
         return
 
-    # Selection changed (or first load): clear previous state.
-    if model is not None:
-        del model
-    if processor is not None:
-        del processor
+    # Selection changed (or first load): drop the previous model before loading
+    # the next one, otherwise both are resident at once. gc.collect() is needed
+    # for empty_cache() to actually release the old weights.
+    processor = None
+    model = None
+    gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    processor = None
-    model = None
     load_error = None
     loaded_model_id = None
 
@@ -128,7 +160,7 @@ def load_model(selected_model_id):
 
         model = VoxtralForConditionalGeneration.from_pretrained(
             selected_model_id,
-            torch_dtype=torch_dtype,
+            dtype=torch_dtype,
             device_map="auto" if device == "cuda" else None,
             low_cpu_mem_usage=True,
         )
@@ -152,6 +184,7 @@ def transcribe(audio_file, prompt, selected_model_id):
     if not prompt:
         prompt = "What do you hear in this audio file?"
 
+    selected_model_id = _normalize_model_id(selected_model_id)
     if device == "cpu" and "24B" in selected_model_id:
         return (
             "Voxtral-Small-24B requires significantly more memory than is practical to provide "
@@ -268,22 +301,27 @@ def transcribe(audio_file, prompt, selected_model_id):
                 **inputs,
                 max_new_tokens=MAX_NEW_TOKENS,
                 do_sample=False,
-                temperature=0.0,
                 repetition_penalty=1.1,
                 no_repeat_ngram_size=3,
                 eos_token_id=eos_token_id,
                 pad_token_id=pad_token_id,
             )
 
-        generated_tokens = outputs[:, inputs.input_ids.shape[1] :]
+        input_ids = inputs.get("input_ids") if hasattr(inputs, "get") else getattr(inputs, "input_ids", None)
+        if input_ids is not None:
+            generated_tokens = outputs[:, input_ids.shape[1] :]
+        else:
+            # Without the prompt length we can only decode the full sequence.
+            generated_tokens = outputs
         decoded_outputs = processor.batch_decode(
             generated_tokens,
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True,
         )
         if decoded_outputs:
-            cleaned_text = _clean_generated_text(decoded_outputs[0])
-            if _looks_garbled(cleaned_text):
+            raw_text = decoded_outputs[0]
+            cleaned_text = _clean_generated_text(raw_text)
+            if _looks_garbled(cleaned_text, raw_text):
                 whisper_text = _whisper_transcription_fallback(audio_file)
                 if whisper_text:
                     return (
@@ -362,7 +400,7 @@ with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
     - "Describe the sounds in detail."
     - "Translate the speech into English."
     """)
-    
+
     submit_btn.click(
         fn=transcribe,
         inputs=[audio_input, prompt_input, model_select],
@@ -373,7 +411,14 @@ with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
 
 if __name__ == "__main__":
     # Respect Pinokio-injected GRADIO_SERVER_NAME / GRADIO_SERVER_PORT env vars
-    # so the launcher can pick a free port and bind to 127.0.0.1.
+    # so the launcher can pick a free port and bind to 127.0.0.1. Parsing the
+    # port here (rather than leaving it to Gradio) keeps a blank/invalid value
+    # from crashing startup; None lets Gradio scan for a free port.
     # concurrency_limit=1 on the click handler above serializes requests since
     # model/processor are shared global state that isn't safe for concurrent access.
-    app.queue().launch(share=False)
+    app.queue().launch(
+        server_name=os.environ.get("GRADIO_SERVER_NAME") or "127.0.0.1",
+        server_port=_env_int("GRADIO_SERVER_PORT", None),
+        share=False,
+        show_error=True,
+    )
