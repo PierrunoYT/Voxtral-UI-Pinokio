@@ -28,7 +28,11 @@ def _env_int(name, default):
 MAX_NEW_TOKENS = _env_int("VOXTRAL_MAX_NEW_TOKENS", 384)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-torch_dtype = torch.float16 if device == "cuda" else torch.float32
+if device == "cuda":
+    # Voxtral ships bf16 weights; fp16 can overflow and produce garbage.
+    torch_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+else:
+    torch_dtype = torch.float32
 
 processor = None
 model = None
@@ -68,19 +72,15 @@ def _whisper_transcription_fallback(audio_file):
                 task="automatic-speech-recognition",
                 model="openai/whisper-small",
                 device=0 if torch.cuda.is_available() else -1,
+                # Whisper's window is 30 s; chunking transcribes longer clips fully.
+                chunk_length_s=30,
             )
         result = asr_pipeline(audio_file)
-        if isinstance(result, list):
-            # Chunked pipelines return one dict per chunk.
-            result = result[0] if result else None
         if isinstance(result, dict):
-            text = str(result.get("text", "")).strip()
-            if text:
-                return text
-        if isinstance(result, str):
-            return result.strip()
+            return str(result.get("text", "")).strip()
         return ""
     except Exception:
+        traceback.print_exc()
         return ""
 
 
@@ -213,7 +213,6 @@ def transcribe(audio_file, prompt, selected_model_id):
         ]
 
         template = _select_chat_template(processor)
-        input_build_errors = []
         template_error = None
         try:
             if template:
@@ -234,57 +233,21 @@ def transcribe(audio_file, prompt, selected_model_id):
                     return_dict=True,
                 )
         except Exception as exc:
+            # Only remaining input path: Voxtral's transcription request. It
+            # cannot carry the user's prompt, which the reply discloses.
             template_error = exc
-            input_build_errors.append(f"apply_chat_template failed: {exc}")
-            inputs = None
-
-            # Fallback 1: transcription request helper (if available).
-            if hasattr(processor, "apply_transcription_request"):
-                try:
-                    inputs = processor.apply_transcription_request(
-                        audio=audio_file,
-                        model_id=loaded_model_id,
-                    )
-                except Exception as transcription_exc:
-                    input_build_errors.append(
-                        f"apply_transcription_request failed: {transcription_exc}"
-                    )
-
-            # Fallback 2: direct processor call with loaded waveform.
-            if inputs is None:
-                try:
-                    import librosa  # type: ignore[reportMissingImports]
-
-                    sampling_rate = getattr(
-                        getattr(processor, "feature_extractor", None),
-                        "sampling_rate",
-                        16000,
-                    )
-                    waveform, _ = librosa.load(audio_file, sr=sampling_rate, mono=True)
-                    text_prompt = prompt
-
-                    for call_kwargs in (
-                        {"text": [text_prompt], "audio": [waveform]},
-                        {"text": [text_prompt], "audios": [waveform]},
-                    ):
-                        try:
-                            inputs = processor(
-                                **call_kwargs,
-                                return_tensors="pt",
-                                padding=False,
-                            )
-                            break
-                        except Exception as direct_exc:
-                            input_build_errors.append(
-                                f"processor direct call failed ({list(call_kwargs.keys())}): {direct_exc}"
-                            )
-                except Exception as librosa_exc:
-                    input_build_errors.append(f"librosa/direct audio fallback failed: {librosa_exc}")
-
-            if inputs is None:
+            if not hasattr(processor, "apply_transcription_request"):
+                return f"Processing error: Could not build inputs for Voxtral.\n\nDetails: {exc}"
+            try:
+                inputs = processor.apply_transcription_request(
+                    audio=audio_file,
+                    model_id=loaded_model_id,
+                )
+            except Exception as transcription_exc:
                 return (
                     "Processing error: Could not build inputs for Voxtral.\n\n"
-                    "Details:\n- " + "\n- ".join(input_build_errors)
+                    f"Details:\n- apply_chat_template failed: {exc}\n"
+                    f"- apply_transcription_request failed: {transcription_exc}"
                 )
 
         if device == "cuda":
@@ -296,13 +259,13 @@ def transcribe(audio_file, prompt, selected_model_id):
         eos_token_id = getattr(tokenizer, "eos_token_id", None) if tokenizer is not None else None
         pad_token_id = getattr(tokenizer, "pad_token_id", None) if tokenizer is not None else None
 
+        # Plain greedy decoding: repetition penalties and n-gram blocking
+        # corrupt transcripts, where repeated phrases are legitimate.
         with torch.inference_mode():
             outputs = model.generate(
                 **inputs,
                 max_new_tokens=MAX_NEW_TOKENS,
                 do_sample=False,
-                repetition_penalty=1.1,
-                no_repeat_ngram_size=3,
                 eos_token_id=eos_token_id,
                 pad_token_id=pad_token_id,
             )
@@ -313,47 +276,55 @@ def transcribe(audio_file, prompt, selected_model_id):
         else:
             # Without the prompt length we can only decode the full sequence.
             generated_tokens = outputs
-        decoded_outputs = processor.batch_decode(
+        if generated_tokens.shape[0] == 0:
+            return "No response generated."
+        # Decode with special tokens kept so garbage such as repeated
+        # [TOOL_CALLS] markers is detectable; the cleaned text strips them.
+        raw_text = processor.batch_decode(
+            generated_tokens,
+            skip_special_tokens=False,
+            clean_up_tokenization_spaces=True,
+        )[0]
+        text = processor.batch_decode(
             generated_tokens,
             skip_special_tokens=True,
             clean_up_tokenization_spaces=True,
-        )
-        if decoded_outputs:
-            raw_text = decoded_outputs[0]
-            cleaned_text = _clean_generated_text(raw_text)
-            if _looks_garbled(cleaned_text, raw_text):
-                whisper_text = _whisper_transcription_fallback(audio_file)
-                if whisper_text:
-                    return (
-                        f"[Model: {loaded_model_id}]\n"
-                        "[Note: Voxtral fallback output was invalid, Whisper transcription was used instead.]\n\n"
-                        f"{whisper_text}"
-                    )
+        )[0]
+        cleaned_text = _clean_generated_text(text)
+        if _looks_garbled(cleaned_text, raw_text):
+            whisper_text = _whisper_transcription_fallback(audio_file)
+            if whisper_text:
                 return (
-                    "Processing error: The model produced invalid output in fallback mode.\n\n"
-                    "Please try:\n"
-                    "- a shorter/cleaner audio clip,\n"
-                    "- the other model in the dropdown,\n"
-                    "- or updating Transformers and restarting.\n\n"
-                    f"Raw output (truncated): {decoded_outputs[0][:400]}"
+                    f"[Model: openai/whisper-small]\n"
+                    f"[Warning: {loaded_model_id} produced unusable output, so your question was NOT answered. "
+                    "Below is a plain Whisper transcript of the audio instead.]\n\n"
+                    f"{whisper_text}"
                 )
-            prefix = f"[Model: {loaded_model_id}]"
-            if template_error is not None:
-                prefix += "\n[Note: Chat template failed, transcription fallback was used instead.]"
-            return f"{prefix}\n\n{cleaned_text}"
-        return "No response generated."
-    except Exception as exc:
-        if "Can't compile non template nodes" in str(exc):
             return (
-                "Error processing the model's template.\n\n"
-                "This error occurs in the tokenizer's chat-template processing.\n"
-                "The app is now automatically trying a fallback mode.\n\n"
-                f"Details: {exc}"
+                "Processing error: The model produced invalid output.\n\n"
+                "Please try:\n"
+                "- a shorter/cleaner audio clip,\n"
+                "- the other model in the dropdown,\n"
+                "- or updating Transformers and restarting.\n\n"
+                f"Raw output (truncated): {raw_text[:400]}"
             )
+        prefix = f"[Model: {loaded_model_id}]"
+        if template_error is not None:
+            prefix += (
+                "\n[Note: The chat template failed, so the audio was transcribed instead; "
+                "your question was ignored.]"
+            )
+        if generated_tokens.shape[1] >= MAX_NEW_TOKENS:
+            prefix += (
+                f"\n[Note: Output reached the {MAX_NEW_TOKENS}-token limit and may be cut off. "
+                "Raise VOXTRAL_MAX_NEW_TOKENS for longer output.]"
+            )
+        return f"{prefix}\n\n{cleaned_text}"
+    except Exception as exc:
         return f"Processing error: {exc}"
 
 # Gradio Interface
-with gr.Blocks(title="Voxtral Audio-Text Chat", theme=gr.themes.Soft()) as app:
+with gr.Blocks(title="Voxtral Audio-Text Chat") as app:
     gr.Markdown("# 🎵 Voxtral Audio-Text Chat")
     gr.Markdown(
         "Upload audio and ask a text question for Voxtral. "
@@ -421,4 +392,5 @@ if __name__ == "__main__":
         server_port=_env_int("GRADIO_SERVER_PORT", None),
         share=False,
         show_error=True,
+        theme=gr.themes.Soft(),
     )

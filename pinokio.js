@@ -1,8 +1,8 @@
-const path = require('path')
 module.exports = {
   version: "1.0",
   menu: async (kernel, info) => {
-    let installed = info.exists("app/env")
+    // The marker is written as the last install step, so a failed install isn't treated as installed.
+    let installed = info.exists("app/env") && info.exists("INSTALLATION_COMPLETE.txt")
     let running = {
       install: info.running("install.js"),
       start: info.running("start.js"),

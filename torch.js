@@ -32,25 +32,14 @@ module.exports = {
       },
       "next": null
     },
-    // windows amd
+    // windows non-nvidia (CPU). The app only uses CUDA, so DirectML would sit unused on AMD.
     {
-      "when": "{{platform === 'win32' && gpu === 'amd'}}",
+      "when": "{{platform === 'win32' && gpu !== 'nvidia'}}",
       "method": "shell.run",
       "params": {
         "venv": "{{args && args.venv ? args.venv : null}}",
         "path": "{{args && args.path ? args.path : '.'}}",
-        "message": "uv pip install torch-directml torchaudio torchvision numpy==1.26.4"
-      },
-      "next": null
-    },
-    // windows cpu
-    {
-      "when": "{{platform === 'win32' && (gpu !== 'nvidia' && gpu !== 'amd')}}",
-      "method": "shell.run",
-      "params": {
-        "venv": "{{args && args.venv ? args.venv : null}}",
-        "path": "{{args && args.path ? args.path : '.'}}",
-        "message": "uv pip install torch torchvision torchaudio numpy==1.26.4"
+        "message": "uv pip install torch torchvision torchaudio"
       },
       "next": null
     },

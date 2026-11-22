@@ -69,9 +69,10 @@ The app reads these optional environment variables at startup:
 ## Troubleshooting
 
 **Chat template errors / garbled output** — Some Voxtral + Transformers version combinations hit
-`Can't compile non template nodes` or produce repeated `[TOOL_CALLS]` tokens. The app already
-falls back automatically (transcription-request API, then a direct processor call, then a Whisper
-ASR fallback) — if all of those fail, try updating dependencies via Pinokio's **Update** button.
+`Can't compile non template nodes` or produce repeated `[TOOL_CALLS]` tokens. If the chat template
+fails, the app falls back to Voxtral's transcription request (your question is ignored and the reply
+says so). If the output is still garbled, it shows a Whisper transcript instead, clearly labelled.
+If those fail, try updating dependencies via Pinokio's **Update** button.
 
 **Out of memory** — Use a shorter audio clip, switch to Voxtral-Mini-3B, or free up VRAM/RAM by
 closing other applications.
