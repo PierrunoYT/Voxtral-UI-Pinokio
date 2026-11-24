@@ -3,8 +3,9 @@ gradio>=6.7
 transformers>=4.56.0
 accelerate>=0.34.0
 # Voxtral's processor/tokenizer is backed by mistral-common; the [audio] extra
-# pulls in the audio chunk handling AutoProcessor needs for Voxtral.
-mistral-common[audio]>=1.8.0
+# pulls in the audio chunk handling AutoProcessor needs for Voxtral, and
+# [hf-hub] pins the huggingface_hub version it needs to fetch tekken.json.
+mistral-common[audio,hf-hub]>=1.8.0
 numpy
 safetensors
 soundfile

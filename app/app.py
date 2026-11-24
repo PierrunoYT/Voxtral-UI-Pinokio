@@ -84,36 +84,6 @@ def _whisper_transcription_fallback(audio_file):
         return ""
 
 
-def _select_chat_template(processor_obj):
-    """
-    Some tokenizer configs expose multiple chat templates as a list/dict.
-    Normalize this into a template string for apply_chat_template().
-    """
-    template = getattr(processor_obj, "chat_template", None)
-    if template is None and hasattr(processor_obj, "tokenizer"):
-        template = getattr(processor_obj.tokenizer, "chat_template", None)
-
-    if isinstance(template, str):
-        return template
-
-    if isinstance(template, list):
-        for preferred_name in ("default", "chat", "instruct"):
-            for item in template:
-                if isinstance(item, dict) and item.get("name") == preferred_name and isinstance(item.get("template"), str):
-                    return item["template"]
-        for item in template:
-            if isinstance(item, dict) and isinstance(item.get("template"), str):
-                return item["template"]
-
-    if isinstance(template, dict):
-        for key in ("default", "chat", "instruct", "template"):
-            value = template.get(key)
-            if isinstance(value, str):
-                return value
-
-    return None
-
-
 def _normalize_model_id(selected_model_id):
     """Map an arbitrary dropdown value onto a known model id."""
     if isinstance(selected_model_id, str) and selected_model_id in AVAILABLE_MODELS:
@@ -212,26 +182,17 @@ def transcribe(audio_file, prompt, selected_model_id):
             }
         ]
 
-        template = _select_chat_template(processor)
         template_error = None
         try:
-            if template:
-                inputs = processor.apply_chat_template(
-                    conversation,
-                    chat_template=template,
-                    add_generation_prompt=True,
-                    tokenize=True,
-                    return_tensors="pt",
-                    return_dict=True,
-                )
-            else:
-                inputs = processor.apply_chat_template(
-                    conversation,
-                    add_generation_prompt=True,
-                    tokenize=True,
-                    return_tensors="pt",
-                    return_dict=True,
-                )
+            # Voxtral repos ship no Jinja chat template: mistral-common builds
+            # the prompt (tekken.json), so no template override is passed.
+            inputs = processor.apply_chat_template(
+                conversation,
+                add_generation_prompt=True,
+                tokenize=True,
+                return_tensors="pt",
+                return_dict=True,
+            )
         except Exception as exc:
             # Only remaining input path: Voxtral's transcription request. It
             # cannot carry the user's prompt, which the reply discloses.
